@@ -1,3 +1,4 @@
+import React, { useState } from "react";
 import { View } from "react-native";
 import {
   Skia,
@@ -16,6 +17,12 @@ import {
   Group,
 } from "@shopify/react-native-skia";
 import { useMemo } from "react";
+import {
+  useSharedValue,
+  useDerivedValue,
+  SharedValue,
+} from "react-native-reanimated";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 // import MPLUS1pRegular from "../assets/fonts/MPLUS1p-Regular.ttf";
 
 const randomString = () => Math.random().toString(32).substring(2);
@@ -41,30 +48,32 @@ const LIST_ITEM_GAP = 8;
 const FONT_SIZE = 16;
 
 const SkiaListItem = ({
-  y,
+  index,
   entity,
   font,
+  width,
+  padding,
 }: {
-  y: number;
+  index: number;
   entity: Entity;
   font: SkFont;
+  width: number;
+  padding: number;
 }) => {
-  const textStyle = {
-    color: Skia.Color("black"),
-    // fontFamilies: ["MPLUS1p"],
-    // fontSize: FONT_SIZE,
-    FontWeight: 700,
-  };
-
   if (!font) {
     return null;
   }
 
   return (
-    <Group transform={[{ translateY: y }]}>
+    <>
       <RoundedRect
         rect={{
-          rect: { x: 0, y: 0, width: 500, height: LIST_ITEM_HEIGHT },
+          rect: {
+            x: padding,
+            y: 0,
+            width: width - padding * 2,
+            height: LIST_ITEM_HEIGHT,
+          },
           rx: 8,
           ry: 8,
         }}
@@ -73,7 +82,12 @@ const SkiaListItem = ({
       />
       <RoundedRect
         rect={{
-          rect: { x: 0, y: 0, width: 500, height: LIST_ITEM_HEIGHT },
+          rect: {
+            x: padding,
+            y: 0,
+            width: width - padding * 2,
+            height: LIST_ITEM_HEIGHT,
+          },
           rx: 8,
           ry: 8,
         }}
@@ -83,20 +97,46 @@ const SkiaListItem = ({
       />
       <Text
         font={font}
-        text={entity.label}
+        text={`${index}: ${entity.label}`}
         color="white"
         x={30}
         y={LIST_ITEM_HEIGHT - FONT_SIZE}
       />
-    </Group>
+    </>
   );
 };
 
+const ListItemWrap = ({
+  offsetY,
+  index,
+  children,
+}: {
+  offsetY: SharedValue<number>;
+  index: number;
+  children: React.ReactNode;
+}) => {
+  const transform = useDerivedValue(() => [
+    { translateY: offsetY.value + index * (LIST_ITEM_HEIGHT + LIST_ITEM_GAP) },
+  ]);
+  return <Group transform={transform}>{children}</Group>;
+};
+
 export default function NormalListView() {
-  const canvasWidth = 300;
-  const canvasHeight = 300;
-  const entities = genRandomEitities(10);
+  const [canvasWidth, setCanvasWidth] = useState(0);
+  const [canvasHeight, setCanvasHeight] = useState(0);
+  const entities = genRandomEitities(1000);
   const font = useFont(require("../assets/fonts/MPLUS1p-Bold.ttf"), FONT_SIZE);
+  const offsetY = useSharedValue(0);
+  const startY = useSharedValue(0);
+
+  const dragGesture = Gesture.Pan()
+    .onBegin((_) => {
+      startY.value = offsetY.value;
+    })
+    .onUpdate((e) => {
+      offsetY.value = Math.min(0, startY.value + e.translationY);
+    });
+
   if (!font) return null;
 
   return (
@@ -106,17 +146,32 @@ export default function NormalListView() {
         justifyContent: "center",
         alignItems: "center",
       }}
+      onLayout={(e) => {
+        console.log("onLayout", e.nativeEvent.layout);
+        setCanvasHeight(e.nativeEvent.layout.height);
+        setCanvasWidth(e.nativeEvent.layout.width);
+      }}
     >
-      <Canvas style={{ width: canvasWidth, height: canvasHeight }}>
-        {entities.map((e, i) => (
-          <SkiaListItem
-            key={e.id}
-            entity={e}
-            font={font}
-            y={i * (LIST_ITEM_HEIGHT + LIST_ITEM_GAP)}
-          />
-        ))}
-      </Canvas>
+      <GestureDetector gesture={dragGesture}>
+        <Canvas
+          style={{
+            width: canvasWidth,
+            height: canvasHeight,
+          }}
+        >
+          {entities.map((e, i) => (
+            <ListItemWrap key={e.id} offsetY={offsetY} index={i}>
+              <SkiaListItem
+                index={i}
+                entity={e}
+                font={font}
+                width={canvasWidth}
+                padding={8}
+              />
+            </ListItemWrap>
+          ))}
+        </Canvas>
+      </GestureDetector>
     </View>
   );
 }

@@ -7,7 +7,7 @@ export default function Index() {
       style={{
         flex: 1,
         justifyContent: "center",
-        alignItems: "center",
+        alignItems: "stretch",
       }}
     >
       <NormalListView />
